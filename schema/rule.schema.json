@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://edge-rules.local/schema/rule.schema.json",
+  "title": "Edge Rule",
+  "description": "One deterministic rule enforced locally by the ESP32-C3. The device holds max 8 rules. Inputs: button (1=pressed, 0=released), temp (chip temperature, deg C), level (simulated process level 0-100 %, rises while the button is held, drains when released).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "input",
+    "op",
+    "value",
+    "for_ms",
+    "action",
+    "latch",
+    "enabled"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,15}$",
+      "description": "Short unique rule id, e.g. r1"
+    },
+    "input": {
+      "enum": [
+        "button",
+        "temp",
+        "level"
+      ],
+      "description": "button: 1 = pressed, 0 = released. temp: chip temperature in deg C. level: simulated tank level in percent (0-100)."
+    },
+    "op": {
+      "enum": [
+        "==",
+        "!=",
+        ">",
+        "<",
+        ">=",
+        "<="
+      ]
+    },
+    "value": {
+      "type": "number",
+      "minimum": -1000,
+      "maximum": 1000
+    },
+    "for_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3600000,
+      "description": "Condition must hold continuously this long before the rule fires (0 = immediate)."
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "period_ms"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "on",
+            "off",
+            "blink"
+          ],
+          "description": "Alarm output (LED). Priority when several rules fire: on > blink > off."
+        },
+        "period_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000,
+          "description": "Blink period (full on+off cycle). Use 0 for on/off. Blink requires >= 50."
+        }
+      },
+      "if": {
+        "properties": {
+          "type": {
+            "const": "blink"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "period_ms": {
+            "minimum": 50
+          }
+        }
+      }
+    },
+    "latch": {
+      "type": "boolean",
+      "description": "If true, once fired the action stays until the rule is cleared."
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "label": {
+      "type": "string",
+      "maxLength": 71,
+      "description": "Optional: the plain-language sentence the rule was compiled from (shown on the device page). Set by the agent."
+    }
+  }
+}

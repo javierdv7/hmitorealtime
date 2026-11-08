@@ -1,0 +1,8 @@
+firmware/.pio/
+firmware/include/secrets.h
+.venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+config/
