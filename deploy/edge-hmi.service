@@ -1,0 +1,17 @@
+[Unit]
+Description=Edge Rules HMI (web, port 8090)
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+User=logos
+WorkingDirectory=/mnt/external/edge-rules
+Environment=MQTT_HOST=localhost
+Environment=DEVICE_ID=edge01
+Environment=HMI_PORT=8090
+ExecStart=/mnt/external/edge-rules/.venv/bin/python hmi/hmi_server.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
