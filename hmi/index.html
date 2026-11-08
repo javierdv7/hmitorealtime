@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PLC Edge · Banco de pruebas</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0d0d0d; --panel: #171717; --popover: #1c1c1c; --line: rgba(255,255,255,.10); --input: rgba(255,255,255,.15);
+    --text: #ececec; --muted: #a8a8a8; --ok: #4ade80; --bad: #f87171; --warn: #facc15; --info: #00b0c2; --accent: #e16e09;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace; --radius: 9px;
+  }
+  * { box-sizing: border-box; }
+  body { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100dvh; overflow: hidden; margin: 0; background: radial-gradient(ellipse at 48% -25%, #252019 0, transparent 45%), var(--bg); color: var(--text); font: 14px/1.5 Geist, Inter, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 8px; padding: 10px clamp(16px, 3vw, 40px); border-bottom: 1px solid var(--line); background: rgba(13,13,13,.86); flex-wrap: wrap; }
+  header h1 { display: flex; align-items: center; gap: 12px; font-size: 14px; letter-spacing: -.02em; margin: 0 auto 0 0; font-weight: 600; }
+  header h1::before { content: "ER"; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 7px; background: #b95a07; color: #fff; font: 700 12px var(--mono); letter-spacing: -.08em; }
+  header h1 span { display: block; color: var(--muted); font-weight: 400; font-size: 12px; letter-spacing: 0; }
+  .pill { display: inline-flex; align-items: center; gap: 7px; min-height: 26px; padding: 3px 8px; border: 1px solid var(--line); border-radius: 5px; background: rgba(255,255,255,.025); font-size: 11px; font-family: var(--mono); color: var(--muted); }
+  .dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: currentColor; }
+  .ok { color: var(--ok); border-color: rgba(74,222,128,.25); background: rgba(74,222,128,.08); }
+  .bad { color: var(--bad); border-color: rgba(248,113,113,.25); background: rgba(248,113,113,.08); }
+  main { width: min(100%, 1560px); height: 100%; min-height: 0; margin-inline: auto; display: grid; grid-template-rows: minmax(0, .9fr) minmax(0, 1.1fr) minmax(0, .8fr); gap: 8px; padding: 12px clamp(16px, 3vw, 40px) 14px; grid-template-columns: repeat(12, minmax(0, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; min-width: 0; min-height: 0; overflow: auto; box-shadow: inset 0 1px rgba(255,255,255,.035), 0 10px 30px rgba(0,0,0,.18); }
+  .card h2 { margin: 0 0 10px; font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .controls { grid-column: span 5; }
+  .rules { grid-column: span 7; display: flex; flex-direction: column; }
+  .tank { grid-column: span 8; display: flex; flex-direction: column; }
+  .alarms { grid-column: span 4; display: flex; flex-direction: column; }
+  .devlog { grid-column: span 12; display: flex; flex-direction: column; }
+  .tank-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .tank-head h2 { margin-bottom: 0; }
+  .level-value { color: var(--info); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+  .chart { width: 100%; flex: 1; min-height: 0; }
+  #level-chart { display: block; width: 100%; height: 100%; }
+  .chart-note { margin-top: 4px; color: var(--muted); font-size: 10px; }
+  .alarm-list { list-style: none; margin: 0; padding: 0; min-height: 0; overflow: auto; font: 10px/1.5 var(--mono); }
+  .alarm-list li { display: flex; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+  .alarm-list time { color: var(--muted); flex: none; }
+  .alarm-list .trigger { color: var(--bad); } .alarm-list .clear { color: var(--ok); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; padding: 0 8px 9px 0; }
+  td { padding: 10px 8px 10px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  .state { font-weight: 600; font-size: 11px; } .state.fire { color: var(--bad); } .state.idle { color: var(--muted); } .state.latch { color: var(--warn); }
+  tr.fire td { background: rgba(248,113,113,.04); }
+  .empty { color: var(--muted); font-style: normal; }
+  .err { color: var(--bad); font-size: 12px; margin-top: 8px; }
+  #lost { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px;
+          background: rgba(13,13,13,.84); color: #a8a8a8; font: 600 24px var(--mono); letter-spacing: -.03em; text-align: center; padding: 16px; backdrop-filter: blur(5px); }
+  #lost small { color: var(--muted); font-size: 14px; font-weight: 400; letter-spacing: 0; }
+  body.lost #lost { display: flex; }
+  body.lost > header, body.lost > main { filter: grayscale(1); opacity: .45; }
+  .rule-form { display: flex; flex-direction: column; gap: 8px; }
+  .rule-form textarea { width: 100%; min-width: 0; min-height: 70px; resize: vertical; background: rgba(255,255,255,.035); color: var(--text); border: 1px solid var(--input); border-radius: 7px; padding: 11px 12px; font: inherit; font-size: 13px; line-height: 1.5; }
+  .rule-actions { display: flex; gap: 8px; }
+  .rule-actions button { flex: 1; }
+  .test-hint { margin: 8px 0 0; color: var(--muted); font-size: 11px; }
+  .rule-form button, .rule-delete { border: 1px solid var(--line); background: rgba(255,255,255,.04); color: var(--text); border-radius: 7px; padding: 10px 13px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: background-color 150ms cubic-bezier(.25,.1,.25,1), border-color 150ms cubic-bezier(.25,.1,.25,1), scale 100ms ease-out; }
+  .rule-form button:hover, .rule-delete:hover { background: rgba(255,255,255,.08); border-color: var(--input); }
+  .rule-form button:active, .rule-delete:active { scale: .96; }
+  .rule-form button.primary { background: #b95a07; border-color: #b95a07; color: #fff; }
+  .rule-form button.primary:hover { background: var(--accent); }
+  .rule-form button:disabled, .rule-delete:disabled { opacity: .45; cursor: not-allowed; }
+  .rule-delete { color: var(--muted); padding: 5px 8px; }
+  .rule-form textarea:focus-visible, .rule-form button:focus-visible, .rule-delete:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  #devlog { font: 10px/1.45 var(--mono); flex: 1; min-height: 0; overflow: auto; white-space: pre-wrap; margin: 0; color: #b9c3cd; }
+  #devlog .f { color: var(--bad); font-weight: 700; } #devlog .c { color: var(--ok); } #devlog .b { color: var(--warn); }
+  td .lbl { color: var(--text); font-family: system-ui, sans-serif; } td .dsc { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .gear { background: none; border: 1px solid var(--line); color: var(--text); border-radius: 999px; padding: 4px 12px; font: 12px var(--mono); cursor: pointer; display: inline-flex; gap: 7px; align-items: center; }
+  .gear:hover { border-color: var(--muted); }
+  .gear:focus-visible, dialog input:focus-visible, dialog select:focus-visible, dialog button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  dialog { background: var(--popover); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); padding: 0; width: min(460px, calc(100vw - 32px)); box-shadow: 0 20px 60px rgba(0,0,0,.55); }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog form { padding: 18px 20px; display: grid; gap: 12px; }
+  dialog h3 { margin: 0; font-size: 15px; }
+  dialog label { display: grid; gap: 5px; font-size: 12px; color: var(--muted); }
+  dialog input, dialog select { background: rgba(255,255,255,.035); color: var(--text); border: 1px solid var(--input); border-radius: 7px; padding: 9px 10px; font: 13px var(--mono); }
+  dialog .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; flex-wrap: wrap; }
+  dialog button { border: 1px solid var(--line); background: rgba(255,255,255,.04); color: var(--text); border-radius: 7px; padding: 9px 14px; font: 600 12px system-ui, sans-serif; cursor: pointer; }
+  dialog button.primary { background: #b95a07; border-color: #b95a07; color: #fff; }
+  dialog button:disabled { opacity: .5; cursor: progress; }
+  .hint { font-size: 12px; color: var(--muted); }
+  .msg { font: 12px var(--mono); min-height: 1.4em; }
+  .msg.ok { color: var(--ok); } .msg.bad { color: var(--bad); }
+  [data-p] { display: none; } form[data-provider="anthropic"] [data-p="anthropic"], form[data-provider="ollama"] [data-p="ollama"] { display: grid; }
+  @media (max-width: 900px) { body { height: auto; min-height: 100dvh; overflow: auto; display: block; } main { height: auto; grid-template-rows: none; grid-auto-rows: auto; padding-top: 14px; } .controls, .rules, .tank, .alarms, .devlog { grid-column: span 12; } .card { min-height: 140px; } .chart { height: 170px; flex: initial; } #devlog { min-height: 140px; } }
+  @media (max-width: 600px) { header { gap: 7px; } header h1 { flex-basis: 100%; margin-bottom: 4px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>PLC Edge-01<small>HMI · banco de pruebas</small></span></h1>
+  <span class="pill" id="p-broker"><span class="dot"></span>broker</span>
+  <span class="pill" id="p-device"><span class="dot"></span>device</span>
+  <button class="gear" id="llm-open" type="button"><span class="dot" id="llm-dot"></span><span id="llm-label">LLM</span></button>
+</header>
+<dialog id="llm-dlg" aria-labelledby="llm-title">
+  <form id="llm-form" method="dialog" data-provider="anthropic">
+    <h3 id="llm-title">Ajustes del compilador</h3>
+    <p class="hint" style="margin:0">El CM4 convierte tus instrucciones en reglas PLC. La clave se guarda localmente y nunca vuelve al navegador. Los cambios se aplican a la siguiente regla.</p>
+    <label>Proveedor
+      <select name="provider" id="f-provider">
+        <option value="anthropic">Anthropic API</option>
+        <option value="ollama">Ollama local</option>
+      </select>
+    </label>
+    <label data-p="anthropic">Clave API
+      <input name="api_key" id="f-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…">
+      <span class="hint" id="f-key-hint"></span>
+    </label>
+    <label data-p="anthropic">Modelo
+      <input name="anthropic_model" id="f-amodel" spellcheck="false">
+    </label>
+    <label data-p="ollama">Dirección de Ollama
+      <input name="ollama_host" id="f-ohost" spellcheck="false">
+    </label>
+    <label data-p="ollama">Modelo de Ollama
+      <input name="ollama_model" id="f-omodel" spellcheck="false">
+    </label>
+    <div class="msg" id="llm-msg" role="status" aria-live="polite"></div>
+    <div class="row">
+      <button type="button" id="llm-clear" data-p="anthropic" style="margin-right:auto">Quitar clave</button>
+      <button type="button" id="llm-close">Cerrar</button>
+      <button type="button" id="llm-test">Guardar y probar</button>
+      <button type="button" class="primary" id="llm-save">Guardar</button>
+    </div>
+  </form>
+</dialog>
+<main>
+  <section class="card controls">
+    <h2>Programar regla</h2>
+    <form class="rule-form" id="rule-form">
+      <label for="rule-text" class="sr-only">Describe la regla de control</label>
+      <textarea id="rule-text" maxlength="500" placeholder="Ej.: si mantengo BOOT 3 s, activa y enclava la alarma" required></textarea>
+      <div class="rule-actions"><button class="primary" id="rule-send" type="submit">Validar y enviar</button><button id="rule-clear" type="button">Borrar programa</button></div>
+    </form>
+    <div class="msg" id="rule-msg" role="status" aria-live="polite"></div>
+    <p class="test-hint">Prueba rápida: “si el nivel supera 80 % durante 1 s, activa la alarma”.</p>
+  </section>
+  <section class="card rules">
+    <h2>Reglas guardadas en el PLC</h2>
+    <table><thead><tr><th>ID</th><th>Condición → acción</th><th>Estado</th><th></th></tr></thead>
+      <tbody id="rules"><tr><td colspan="4" class="empty">Esperando reglas del PLC…</td></tr></tbody></table>
+    <div class="err" id="rules-err"></div>
+  </section>
+  <section class="card tank">
+    <div class="tank-head"><h2>Nivel del tanque · simulado</h2><div class="level-value" id="level-value">—</div></div>
+    <div class="chart"><canvas id="level-chart" role="img" aria-label="Gráfico del nivel de tanque simulado durante el último minuto"></canvas></div>
+    <div class="chart-note">BOOT pulsado: +20 %/s · liberado: −10 %/s · ventana: 60 s</div>
+  </section>
+  <section class="card alarms">
+    <h2>Alarmas registradas</h2>
+    <ul class="alarm-list" id="alarms"><li class="empty">Sin alarmas registradas</li></ul>
+  </section>
+  <section class="card devlog">
+    <h2>Log del PLC</h2>
+    <pre id="devlog"></pre>
+  </section>
+</main>
+<div id="lost">HMI SIN ENLACE<small>CM4 no disponible · PLC Edge mantiene el control local</small></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const pill = (id, ok, text) => { const p = $(id); p.className = "pill " + (ok ? "ok" : "bad"); p.lastChild.textContent = text; };
+const fmtUp = (ms) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 3600)}h ${Math.floor(s / 60) % 60}m ${s % 60}s`; };
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+
+function describe(r) {
+  const operators = { "==": "=", "!=": "≠", ">": ">", "<": "<", ">=": "≥", "<=": "≤" };
+  let cond;
+  if (r.input === "button" && (r.op === "==" || r.op === "!=")) cond = "BOOT " + ((r.value == 1) === (r.op === "==") ? "pulsado" : "liberado");
+  else cond = `${r.input === "level" ? "nivel simulado" : r.input === "temp" ? "temperatura CPU" : "BOOT"} ${operators[r.op] || r.op} ${r.value}${r.input === "level" ? "%" : r.input === "temp" ? " °C" : ""}`;
+  const held = r.for_ms ? ` durante ${r.for_ms / 1000}s` : "";
+  const a = r.action.type === "blink" ? `PARPADEAR · ${r.action.period_ms} ms` : r.action.type === "on" ? "ACTIVAR ALARMA" : "APAGAR ALARMA";
+  return `SI ${cond}${held} → ${a}${r.latch ? " · ENCLAVAR" : ""}${r.enabled ? "" : " · deshabilitada"}`;
+}
+
+let lastLog = 0, lastTelemetryAt = 0, levelSamples = [];
+function drawLevel(canvas, samples) {
+  const { width, height } = canvas.getBoundingClientRect();
+  if (!width || !height) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), ctx = canvas.getContext("2d");
+  canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); ctx.scale(dpr, dpr);
+  const left = 34, right = width - 8, top = 8, bottom = height - 18, plotH = bottom - top, now = Date.now();
+  ctx.font = "10px ui-monospace, monospace"; ctx.textBaseline = "middle";
+  for (const value of [100, 50, 0]) {
+    const y = bottom - value / 100 * plotH;
+    ctx.strokeStyle = "rgba(255,255,255,.10)"; ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+    ctx.fillStyle = "#a8a8a8"; ctx.textAlign = "right"; ctx.fillText(`${value}%`, left - 6, y);
+  }
+  ctx.fillStyle = "#a8a8a8"; ctx.textAlign = "left"; ctx.fillText("−60 s", left, height - 7);
+  ctx.textAlign = "center"; ctx.fillText("−30 s", (left + right) / 2, height - 7);
+  ctx.textAlign = "right"; ctx.fillText("ahora", right, height - 7);
+  const visible = samples.filter((p) => p.at >= now - 60000);
+  if (visible.length) {
+    const path = visible.map((p) => [left + Math.max(0, (p.at - (now - 60000)) / 60000) * (right - left), bottom - Math.max(0, Math.min(100, p.value)) / 100 * plotH]);
+    ctx.beginPath(); path.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    ctx.strokeStyle = "#00b0c2"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.lineTo(path.at(-1)[0], bottom); ctx.lineTo(path[0][0], bottom); ctx.closePath(); ctx.fillStyle = "rgba(0,176,194,.10)"; ctx.fill();
+  }
+}
+function renderLog(lines) {
+  const L = $("devlog"), stick = L.scrollTop + L.clientHeight >= L.scrollHeight - 20;
+  if (!lines.length) { L.textContent = ""; lastLog = 0; return; }
+  for (const [seq, line] of lines) {
+    if (seq <= lastLog) continue;
+    lastLog = seq;
+    const sp = document.createElement("span");
+    sp.className = /FIRED|REJECTED/.test(line) ? "f" : /CLEARED|ONLINE|CONNECTED|ACCEPTED|LOADED/.test(line) ? "c" : /OFFLINE|failed|DOWN/.test(line) ? "b" : "";
+    sp.textContent = line + "\n"; L.appendChild(sp);
+  }
+  while (L.childNodes.length > 400) L.removeChild(L.firstChild);
+  if (stick) L.scrollTop = L.scrollHeight;
+}
+function render(m) {
+  const t = m.telemetry, st = m.state, fresh = t && m.telemetry_age !== null && m.telemetry_age < 3;
+  pill("p-broker", m.broker, m.broker ? "broker conectado" : "broker sin enlace");
+  pill("p-device", m.status === "online" && fresh, m.status === "online" ? (fresh ? "PLC online" : "PLC sin datos") : `PLC ${m.status}`);
+  const rules = (st && st.rules) || [];
+  renderLog(m.device_log || []);
+  if (t) {
+    $("level-value").textContent = `${t.level.toFixed(1)} %`;
+    if (m.telemetry_at !== lastTelemetryAt) {
+      lastTelemetryAt = m.telemetry_at;
+      levelSamples.push({ at: m.telemetry_at * 1000, value: t.level });
+      levelSamples = levelSamples.slice(-60);
+      drawLevel($("level-chart"), levelSamples);
+    }
+  }
+
+  $("rules").innerHTML = rules.length ? rules.map((r) => {
+    const s = r.latched ? ["latch", "ENCLAVADA"] : r.firing ? ["fire", "ACTIVA"] : ["idle", "EN REPOSO"];
+    return `<tr class="${r.firing ? "fire" : ""}"><td>${esc(r.id)}</td><td>${r.label ? `<div class="lbl">“${esc(r.label)}”</div>` : ""}<div class="dsc">${esc(describe(r))}</div></td><td class="state ${s[0]}">${s[1]}</td><td><button class="rule-delete" type="button" data-rule-id="${esc(r.id)}" aria-label="Quitar regla ${esc(r.id)}" ${m.broker ? "" : "disabled"}>Quitar</button></td></tr>`;
+  }).join("") : `<tr><td colspan="4" class="empty">${st ? "Sin reglas residentes" : "Esperando programa del PLC…"}</td></tr>`;
+  $("rule-send").disabled = !m.broker;
+  $("rule-clear").disabled = !m.broker || !rules.length;
+  document.querySelectorAll(".rule-delete").forEach((button) => { button.disabled = !m.broker; });
+  $("rules-err").textContent = st && st.error ? `El PLC rechazó el programa: ${st.error}` : "";
+
+  const alarmEvents = m.events.filter((e) => e.kind === "alarm" || /RULE CLEARED|rule .* cleared/i.test(e.text)).slice(0, 12);
+  $("alarms").innerHTML = alarmEvents.length ? alarmEvents.map((e) =>
+    `<li><time>${new Date(e.t * 1000).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time><span class="${e.kind === "alarm" ? "trigger" : "clear"}">${esc(e.text)}</span></li>`).join("") : '<li class="empty">Sin alarmas registradas</li>';
+}
+
+let lastMsg = Date.now(), es = null;
+function onState(data) {
+  lastMsg = Date.now();
+  document.body.classList.remove("lost");
+  render(data);
+}
+function connect() {
+  if (es) { try { es.close(); } catch (_) {} }
+  es = new EventSource("/events");
+  es.onmessage = (ev) => onState(JSON.parse(ev.data));
+  es.onerror = () => {
+    document.body.classList.add("lost");
+    try { es.close(); } catch (_) {}
+    es = null;
+  };
+}
+async function probe() {
+  if (Date.now() - lastMsg <= 1500 && es && es.readyState === 1) return;
+  if (Date.now() - lastMsg > 2000) document.body.classList.add("lost");
+  const ac = new AbortController(), timer = setTimeout(() => ac.abort(), 1000);
+  try {
+    const r = await fetch("/state", { signal: ac.signal, cache: "no-store" });
+    if (r.ok) {
+      onState(await r.json());
+      if (!es || es.readyState !== 1) connect();
+    }
+  } catch (_) {
+    if (Date.now() - lastMsg > 2000) document.body.classList.add("lost");
+  } finally {
+    clearTimeout(timer);
+  }
+}
+setInterval(probe, 1000);
+window.addEventListener("online", () => { connect(); probe(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) probe(); });
+connect();
+window.addEventListener("resize", () => drawLevel($("level-chart"), levelSamples));
+
+const ruleMsg = (text, kind = "") => { $("rule-msg").textContent = text; $("rule-msg").className = "msg " + kind; };
+async function changeRules(path, body) {
+  const b = $("rule-send"); b.disabled = true;
+  ruleMsg("Validando la instrucción y compilando la regla…");
+  try {
+    const result = await api(path, body);
+    ruleMsg(path.endsWith("clear") ? "Programa borrado del PLC." : `Regla ${result.rules.at(-1).id} validada y enviada. Esperando confirmación…`, "ok");
+    if (path === "/api/rules") { $("rule-text").value = ""; }
+  } catch (e) { ruleMsg(e.message, "bad"); }
+  finally { b.disabled = !lastState?.broker; }
+}
+let lastState;
+const renderWithControls = render;
+render = (m) => { lastState = m; renderWithControls(m); };
+$("rule-form").onsubmit = (ev) => { ev.preventDefault(); changeRules("/api/rules", { text: $("rule-text").value }); };
+$("rule-clear").onclick = () => { if (confirm("¿Borrar todas las reglas residentes del PLC?")) changeRules("/api/rules/clear", {}); };
+$("rules").onclick = (ev) => {
+  const button = ev.target.closest("button[data-rule-id]");
+  if (button) changeRules("/api/rules/clear", { id: button.dataset.ruleId });
+};
+
+// ---------- LLM settings
+const dlg = $("llm-dlg"), form = $("llm-form"), msg = (t, k) => { $("llm-msg").textContent = t; $("llm-msg").className = "msg " + (k || ""); };
+function showCfg(c) {
+  $("f-provider").value = c.provider; form.dataset.provider = c.provider;
+  $("f-amodel").value = c.anthropic_model; $("f-ohost").value = c.ollama_host; $("f-omodel").value = c.ollama_model;
+  $("f-key").value = "";
+  $("f-key-hint").textContent = c.has_key ? `Clave guardada (${c.key_hint}). Déjala vacía para conservarla.` : "Todavía no hay una clave guardada.";
+  const ready = c.provider === "ollama" || c.has_key;
+  $("llm-label").textContent = `IA · ${c.model}${ready ? "" : " · falta clave"}`;
+  $("llm-dot").style.background = ready ? "var(--ok)" : "var(--warn)";
+}
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText); return j;
+}
+const formBody = () => ({ provider: $("f-provider").value, api_key: $("f-key").value, anthropic_model: $("f-amodel").value,
+                          ollama_host: $("f-ohost").value, ollama_model: $("f-omodel").value });
+async function save() { const c = await api("/api/llm", formBody()); showCfg(c); return c; }
+$("f-provider").onchange = () => { form.dataset.provider = $("f-provider").value; };
+$("llm-open").onclick = async () => { msg(""); try { showCfg(await api("/api/llm")); } catch (e) { msg(e.message, "bad"); } dlg.showModal(); };
+$("llm-close").onclick = () => dlg.close();
+$("llm-save").onclick = async () => { try { await save(); msg("Configuración guardada.", "ok"); } catch (e) { msg(e.message, "bad"); } };
+$("llm-clear").onclick = async () => { try { showCfg(await api("/api/llm", { api_key: null })); msg("Clave eliminada.", "ok"); } catch (e) { msg(e.message, "bad"); } };
+$("llm-test").onclick = async (ev) => {
+  const b = ev.currentTarget; b.disabled = true; msg("Probando conexión con el modelo…");
+  try { await save(); const r = await api("/api/llm/test", {}); msg(r.message, r.ok ? "ok" : "bad"); }
+  catch (e) { msg(e.message, "bad"); } finally { b.disabled = false; }
+};
+api("/api/llm").then(showCfg).catch(() => {});
+</script>
+</body>
+</html>
